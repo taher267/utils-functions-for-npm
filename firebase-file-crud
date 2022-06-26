@@ -1,0 +1,86 @@
+//firebase.jsx
+import { initializeApp } from "firebase/app";
+import { getStorage } from "firebase/storage";
+const firebaseConfig = {
+    apiKey: process.env.FIRE_API_KEY,
+    authDomain: process.env.FIRE_AUTH_DOMEN,
+    projectId: process.env.FIRE_PROJECT_ID,
+    storageBucket: process.env.FIRE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIRE_MESSAGING_SERDER_ID,
+    appId: process.env.FIRE_APP_ID,
+    measurementId: process.env.FIRE_MEASUREMENT_ID
+};
+
+const app = initializeApp(firebaseConfig);
+export default getStorage(app);
+
+
+
+//NewProduct.jsx
+import React, { Fragment, useState } from 'react';
+import { useAlert } from 'react-alert';
+import storage from '../../../firebase';
+import { deleteObject, getDownloadURL, listAll, ref, uploadBytes } from 'firebase/storage';
+import { v4 } from 'uuid';
+import { useEffect } from 'react';
+
+const NewProduct = () => {
+    const alert = useAlert();
+    const [uploadImage, setUploadImage] = useState('');
+    const [imageList, setImageList] = useState([]);
+    const fileNameV4 = ({ name, type }) => {
+        return v4() + '.' + type.split('/')[1];
+        //return  name.replace(/[^\w ]/g, '').trim().replace(/\s/g, '-') + '-' + v4() + '.' + type.split('/')[1];
+    }
+    const imageListRef = ref(storage, 'panzabi-pic/');
+    const imageUploadHander = async e => {
+        e.preventDefault();
+        try {
+            if (!uploadImage) {
+                alert.error('There is no image');
+                return;
+            }
+            const imageRef = ref(storage, `panzabi-pic/${fileNameV4(uploadImage)}`);
+            const { ref: newRef } = await uploadBytes(imageRef, uploadImage);
+            getDownloadURL(newRef).then(url => setImageList(p => [...p, { id: newRef._location.path_, url }]));
+            alert.success("Image has been uploaded!");
+        } catch (err) {
+            alert.error(err.message);
+        }
+
+    }
+
+    useEffect(_ => {
+        listAll(imageListRef).then(res => {
+            res.items.forEach((item) => {
+                getDownloadURL(item).then(url => setImageList(prev => [...prev, { id: item._location.path_, url }]))
+            })
+        });
+    }, []);
+
+    const deleteFile = async image => {
+        try {
+            const desertRef = ref(storage, image);
+            const del = await deleteObject(desertRef);
+            console.dir(del);
+        } catch (delErr) {
+            console.dir(delErr);
+        }
+    }
+    return <Fragment>
+        <div className="newProductContainer">
+            <form id="newProductForm" style={{ display: "", textAlign: 'center' }} onSubmit={imageUploadHander}>
+                <div>
+                    <input type="file" name='fileupload' onChange={e => setUploadImage(e.target.files[0])} accept='image/*' />
+                </div>
+                <input type="submit" value="Upload" />
+            </form>
+        </div>
+        <div className="imagePreview">
+            {imageList.map(imgObj => <img key={imgObj.id} onClick={_ => deleteFile(imgObj.id)} width='450' src={imgObj.url} alt="" />)}
+        </div>
+    </Fragment>
+}
+
+export default NewProduct;
+
